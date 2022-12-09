@@ -2,29 +2,41 @@ const excelJs = require('exceljs')
 const PDFDocument = require('pdfkit')
 const fs = require('fs')
 const UploadExcel = require('../Entity/excel_to_db')
+
 const ReadExcelFile = async (req, res) => {
   try {
     let data = []
     console.log(req.file.path)
     const workbook = new excelJs.Workbook()
     await workbook.xlsx.readFile(req.file.path)
-    workbook.eachSheet(function (worksheet) {
-      console.log(worksheet)
+    workbook.eachSheet(sheet => {
+      if (sheet.columnCount <= 2) {
+        sheet.eachRow(function (row) {
+          if (
+            onlyAlphabets(row.values[1]) &&
+            containsOnlyNumbers(row.values[2]) &&
+            ((row.values[1] != '' && row.values[2] != '') ||
+              (row.values[1] == '' && row.values[2] == ''))
+          ) {
+            const JsonData = {
+              Name: row.values[1],
+              Age: row.values[2]
+            }
+            console.log('Name:', row.values[1])
+            console.log('Age:', row.values[2])
 
-      worksheet.eachRow({ includeEmpty: true }, function (row, rowNumber) {
-        // console.log('Row ' + rowNumber + ' = ' + JSON.stringify(row.values))
-        const JsonData = {
-          Name: row.values[1],
-          Age: row.values[2]
-        }
-        console.log(JsonData)
-        data.push(JsonData)
-        // function onlyLettersAndNumbers(str) {
-        //   return /^[A-Za-z0-9]*$/.test(str);
-        // }
-      })
+            data.push(JsonData)
+            console.log('result', JsonData)
+          } else {
+            console.log('validation failed')
+          }
+        })
+      } else {
+        console.log('column count is more than 2')
+      }
     })
-    data.shift()
+
+    // data.shift()
     const resp = await UploadExcel.bulkCreate(data)
     res.status(200).json({
       response: resp,
@@ -32,12 +44,13 @@ const ReadExcelFile = async (req, res) => {
     })
   } catch (error) {
     console.log(error.message)
-    res.status(400).json({
-      response: null,
-      message: 'failed to fetch .xlsx data into db'
-    })
+    // res.status(400).json({
+    //   response: null,
+    //   message: 'failed to fetch .xlsx data into db'
+    // })
   }
 }
+
 const DownloadPDFfile = async (req, res) => {
   try {
     const resp = await UploadExcel.findAll({
@@ -80,7 +93,7 @@ const DownloadPDFfile = async (req, res) => {
 }
 
 //Validation function
-function onlyLetters (str) {
+function onlyAlphabets (str) {
   return /^[a-zA-Z]+$/.test(str)
 }
 
