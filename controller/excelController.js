@@ -3,51 +3,72 @@ const PDFDocument = require('pdfkit')
 const fs = require('fs')
 const UploadExcel = require('../Entity/excel_to_db')
 
-const ReadExcelFile = async (req, res) => {
+const readExcelFile = async (req, res) => {
   try {
-    let data = []
-    console.log(req.file.path)
+    let ArrayOfData = []
+    let result = []
     const workbook = new excelJs.Workbook()
     await workbook.xlsx.readFile(req.file.path)
-    workbook.eachSheet(sheet => {
-      if (sheet.columnCount <= 2) {
-        sheet.eachRow(function (row) {
-          if (
-            onlyAlphabets(row.values[1]) &&
-            containsOnlyNumbers(row.values[2]) &&
-            ((row.values[1] != '' && row.values[2] != '') ||
-              (row.values[1] == '' && row.values[2] == ''))
-          ) {
-            const JsonData = {
-              Name: row.values[1],
-              Age: row.values[2]
+    fs.unlinkSync(req.file.path)
+
+    workbook.eachSheet(function (workSheet) {
+      const actualCount = workSheet.actualRowCount
+      const rCount = workSheet.rowCount
+      console.log(rCount)
+      if (actualCount > 1) {
+        let resp = validateHeaders(workSheet.getRow(1).values)
+        //header validation
+        if (resp.status === 'ERROR') {
+          result.push({ location: resp.location, message: resp.message })
+        } else {
+          for (let index = 2; index <= rCount; index++) {
+            const element = workSheet.getRow(index).values
+            console.log('Element', element)
+            if (
+              workSheet.getRow(index).values[1] == null ||
+              workSheet.getRow(index).values[2] == null
+            ) {
+              result.push({
+                Message: 'Field must not be empty',
+                location: 'Row' + index
+              })
+            } else {
+              if (
+                onlyAlphabets(workSheet.getRow(index).values[1]) &&
+                containsOnlyNumbers(workSheet.getRow(index).values[2])
+              ) {
+                let data1 = {
+                  Name: element[1],
+                  Age: element[2]
+                }
+                ArrayOfData.push(data1)
+              } else {
+                result.push({
+                  status: 'ERROR',
+                  error_Name: workSheet.getRow(index).values[1],
+                  errors_Age: workSheet.getRow(index).values[2]
+                })
+              }
             }
-            console.log('Name:', row.values[1])
-            console.log('Age:', row.values[2])
-
-            data.push(JsonData)
-            console.log('result', JsonData)
-          } else {
-            console.log('validation failed')
           }
-        })
+        }
       } else {
-        console.log('column count is more than 2')
+        result.push('Data is not found in the excel sheet ')
       }
+      console.log(result)
+      console.log(ArrayOfData)
     })
-
-    // data.shift()
-    const resp = await UploadExcel.bulkCreate(data)
+    const resp = await UploadExcel.bulkCreate(ArrayOfData)
     res.status(200).json({
       response: resp,
-      message: 'successfuly inserted the .xlsx file into db'
+      message: 'success!..'
     })
   } catch (error) {
     console.log(error.message)
-    // res.status(400).json({
-    //   response: null,
-    //   message: 'failed to fetch .xlsx data into db'
-    // })
+    res.status(400).json({
+      response: null,
+      message: 'failed!...'
+    })
   }
 }
 
@@ -59,7 +80,7 @@ const DownloadPDFfile = async (req, res) => {
         exclude: ['Name', 'id']
       }
     })
-    //console.log(resp);
+    console.log(resp)
 
     let sum = 0
     let count = 0
@@ -71,7 +92,7 @@ const DownloadPDFfile = async (req, res) => {
     array.map(res => {
       sum += res
     })
-
+    Nam
     console.log('Sum of age:', sum)
     console.log('Count :', count)
 
@@ -86,13 +107,12 @@ const DownloadPDFfile = async (req, res) => {
         ).toPrecision(3)}`
       )
     doc.end()
-    res.send('pdf converted successfully')
+    res.send('converted into PDF format successfully!...')
   } catch (error) {
     console.log(error)
   }
 }
 
-//Validation function
 function onlyAlphabets (str) {
   return /^[a-zA-Z]+$/.test(str)
 }
@@ -101,4 +121,16 @@ function containsOnlyNumbers (str) {
   return /^[0-9]+$/.test(str)
 }
 
-module.exports = { ReadExcelFile, DownloadPDFfile }
+//validation function
+function validateHeaders (headerRow) {
+  if (headerRow[1] !== 'Name' || headerRow[2] !== 'Age') {
+    return { status: 'ERROR', location: 'ROW 1', message: 'Incorrect Header.' }
+  } else {
+    return { status: 'SUCCESS' }
+  }
+}
+
+module.exports = {
+  readExcelFile,
+  DownloadPDFfile
+}

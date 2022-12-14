@@ -20,7 +20,7 @@ const upload = multer({
 router.post(
   '/readExcelData',
   upload.single('path'),
-  excel_controller.ReadExcelFile
+  excel_controller.readExcelFile
 )
 router.get('/downloadPdfFileData', excel_controller.DownloadPDFfile)
 
