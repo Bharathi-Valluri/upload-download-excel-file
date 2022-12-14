@@ -1,74 +1,66 @@
 const excelJs = require('exceljs')
 const PDFDocument = require('pdfkit')
 const fs = require('fs')
+const axios = require('axios')
 const UploadExcel = require('../Entity/excel_to_db')
 
 const readExcelFile = async (req, res) => {
   try {
-    let ArrayOfData = []
-    let result = []
+    let Data = []
+    let errorMsg = []
     const workbook = new excelJs.Workbook()
     await workbook.xlsx.readFile(req.file.path)
     fs.unlinkSync(req.file.path)
-
-    workbook.eachSheet(function (workSheet) {
-      const actualCount = workSheet.actualRowCount
-      const rCount = workSheet.rowCount
-      console.log(rCount)
-      if (actualCount > 1) {
-        let resp = validateHeaders(workSheet.getRow(1).values)
-        //header validation
-        if (resp.status === 'ERROR') {
-          result.push({ location: resp.location, message: resp.message })
-        } else {
-          for (let index = 2; index <= rCount; index++) {
-            const element = workSheet.getRow(index).values
-            console.log('Element', element)
-            if (
-              workSheet.getRow(index).values[1] == null ||
-              workSheet.getRow(index).values[2] == null
-            ) {
-              result.push({
-                Message: 'Field must not be empty',
-                location: 'Row' + index
+    let workSheet = workbook.getWorksheet[0]
+    const actualCount = workbook.worksheets[0].actualRowCount
+    const rCount = workbook.worksheets[0].rowCount
+    console.log(rCount)
+    if (actualCount > 1) {
+      let resp = validateHeaders(workbook.worksheets[0].getRow(1).values)
+      //header validation
+      if (resp.status === 'ERROR') {
+        msg.push({ location: resp.location, message: resp.message })
+      } else {
+        for (let index = 2; index <= rCount; index++) {
+          let resp = fieldValidation(
+            workbook.worksheets[0].getRow(index).values
+          )
+          console.log(resp)
+          if (resp.status === 'Success') {
+            Data.push(resp.data)
+          } else {
+            for (const msg of resp.message) {
+              errorMsg.push({
+                location: 'Row' + index,
+                message: msg.message
               })
-            } else {
-              if (
-                onlyAlphabets(workSheet.getRow(index).values[1]) &&
-                containsOnlyNumbers(workSheet.getRow(index).values[2])
-              ) {
-                let data1 = {
-                  Name: element[1],
-                  Age: element[2]
-                }
-                ArrayOfData.push(data1)
-              } else {
-                result.push({
-                  status: 'ERROR',
-                  error_Name: workSheet.getRow(index).values[1],
-                  errors_Age: workSheet.getRow(index).values[2]
-                })
-              }
             }
           }
         }
-      } else {
-        result.push('Data is not found in the excel sheet ')
       }
-      console.log(result)
-      console.log(ArrayOfData)
-    })
-    const resp = await UploadExcel.bulkCreate(ArrayOfData)
+    } else {
+      msg.push('Data is not available in sheet ')
+    }
+    console.log(Data)
+    console.log(errorMsg)
+    // //Db Insertion
+    let resp
+    if (errorMsg.length > 0) {
+      throw 'Insertion failed'
+    } else {
+      resp = await UploadExcel.bulkCreate(Data)
+      console.log(resp)
+    }
+    if (resp.length > 0) {
+      await axios.get('http://localhost:5000/downloadPdfFileData')
+    }
     res.status(200).json({
       response: resp,
-      message: 'success!..'
+      message: 'success'
     })
   } catch (error) {
-    console.log(error.message)
-    res.status(400).json({
-      response: null,
-      message: 'failed!...'
-    })
+    res.send(error)
+    console.log(error)
   }
 }
 
@@ -92,7 +84,6 @@ const DownloadPDFfile = async (req, res) => {
     array.map(res => {
       sum += res
     })
-    Nam
     console.log('Sum of age:', sum)
     console.log('Count :', count)
 
@@ -113,7 +104,7 @@ const DownloadPDFfile = async (req, res) => {
   }
 }
 
-function onlyAlphabets (str) {
+function onlyLetters (str) {
   return /^[a-zA-Z]+$/.test(str)
 }
 
@@ -127,6 +118,35 @@ function validateHeaders (headerRow) {
     return { status: 'ERROR', location: 'ROW 1', message: 'Incorrect Header.' }
   } else {
     return { status: 'SUCCESS' }
+  }
+}
+function fieldValidation (row) {
+  //console.log("row:", row);
+  let errorArray = []
+  if (!onlyLetters(row[1])) {
+    errorArray.push({
+      status: 'Error',
+      message: 'Name is not valid'
+    })
+  }
+
+  if (!containsOnlyNumbers(row[2])) {
+    errorArray.push({
+      status: 'Error',
+      message: 'Age is not valid'
+    })
+  }
+
+  if (errorArray.length === 0) {
+    return {
+      status: 'Success',
+      data: {
+        Name: row[1],
+        Age: row[2]
+      }
+    }
+  } else {
+    return { status: 'Error', message: errorArray }
   }
 }
 
