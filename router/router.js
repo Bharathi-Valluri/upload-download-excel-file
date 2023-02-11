@@ -22,6 +22,9 @@ router.post(
   upload.single('path'),
   excel_controller.readExcelFile
 )
-router.get('/downloadPdfFileData', excel_controller.DownloadPDFfile)
+router.get('/getValuesFromCache', excel_controller.getValues)
+
+router.post('/readcsvdata', upload.single('path'), excel_controller.upload)
+// router.get('/downloadFileData', excel_controller.initCache)
 
 module.exports = router
